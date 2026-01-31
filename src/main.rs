@@ -50,7 +50,7 @@ fn encode_stick_params(decoded: &[u16; 2]) -> [u8; 3] {
 impl Controller {
     pub fn connect() -> Result<Self> {
         let api = HidApi::new()?;
-        
+
         // Try to connect to each controller type in sequence
         if let Ok(device) = api.open(NINTENDO_VID, JOYCON_L_PID) {
             println!("Joy-Con (L)");
@@ -60,7 +60,7 @@ impl Controller {
                 timing_byte: 0,
             });
         }
-        
+
         if let Ok(device) = api.open(NINTENDO_VID, JOYCON_R_PID) {
             println!("Joy-Con (R)");
             return Ok(Controller {
@@ -69,7 +69,7 @@ impl Controller {
                 timing_byte: 0,
             });
         }
-        
+
         if let Ok(device) = api.open(NINTENDO_VID, PRO_CONTROLLER_PID) {
             println!("Pro Controller");
             return Ok(Controller {
@@ -87,15 +87,15 @@ impl Controller {
         let mut buf = [0u8; 49];
         let mut cmd = [0u8; 49];
         let mut error_reading = 0;
-        
+
         while error_reading < 20 {
             // Prepare command for device info
             cmd[0] = 0x01; // cmd
             cmd[10] = 0x02; // subcmd
-            
+
             // Send command and read response
             self.device.write(&cmd)?;
-            
+
             let mut retries = 0;
             while retries < 8 {
                 match self.device.read_timeout(&mut buf, 64) {
@@ -104,7 +104,7 @@ impl Controller {
                         if buf[0x0D] == 0x82 && buf[0x0E] == 0x02 {
                             // Format firmware version
                             let firmware = format!("{:X}.{:02X}", buf[0x0F], buf[0x10]);
-                            
+
                             // Format MAC address
                             let mac = format!("{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
                                 buf[0x13], buf[0x14], buf[0x15], buf[0x16], buf[0x17], buf[0x18]);
@@ -118,7 +118,7 @@ impl Controller {
             }
             error_reading += 1;
         }
-        
+
         Err(anyhow!("Failed to get valid device info after multiple attempts"))
     }
 
@@ -136,7 +136,7 @@ impl Controller {
 
         print!("Would you like to calibrate your controller sticks? y/n: ");
         io::stdout().flush()?;
-        
+
         let choice = Self::read_char().to_ascii_lowercase();
         if choice != 'y' {
             println!("Quitting. No changes have been made.");
@@ -148,9 +148,9 @@ impl Controller {
         println!("\nChoose from the following:");
         println!("1: Stick Calibration Wizard");
         println!("2: Raw calibration (no deadzone, max range. Useful for aligning sensors)");
-        
+
         io::stdout().flush()?;
-        
+
         let input = Self::read_char();
         match input {
             '1' => {
@@ -171,10 +171,10 @@ impl Controller {
     fn run_calibration(&mut self, raw_calibration: bool) -> Result<()> {
         let mut left_cal = StickCalibration::default();
         let mut right_cal = StickCalibration::default();
-        
+
         if raw_calibration {
             println!("Flashing raw calibration.");
-            
+
             // Set raw calibration values
             left_cal.xmin = 0;
             left_cal.ymin = 0;
@@ -182,19 +182,19 @@ impl Controller {
             left_cal.ymax = 0xfff;
             left_cal.xcenter = 0x7ff;
             left_cal.ycenter = 0x7ff;
-            
+
             right_cal.xmin = 0;
             right_cal.ymin = 0;
             right_cal.xmax = 0xfff;
             right_cal.ymax = 0xfff;
             right_cal.xcenter = 0x7ff;
             right_cal.ycenter = 0x7ff;
-            
+
             let left_deadzone = 0u16;
             let right_deadzone = 0u16;
-            
+
             self.write_calibration(left_cal, right_cal, left_deadzone, right_deadzone, raw_calibration)?;
-            
+
             return Ok(());
         }
 
@@ -251,7 +251,7 @@ impl Controller {
                     min_ry = min_ry.min(ry);
                     max_ry = max_ry.max(ry);
 
-                    print!("\rReading: L({:03X}, {:03X}) R({:03X}, {:03X})   Min/Max L({:03X}, {:03X}, {:03X}, {:03X}) R({:03X}, {:03X}, {:03X}, {:03X})", 
+                    print!("\rReading: L({:03X}, {:03X}) R({:03X}, {:03X})   Min/Max L({:03X}, {:03X}, {:03X}, {:03X}) R({:03X}, {:03X}, {:03X}, {:03X})",
                         lx, ly, rx, ry, min_lx, min_ly, max_lx, max_ly, min_rx, min_ry, max_rx, max_ry);
                     io::stdout().flush()?;
                 }
@@ -313,7 +313,7 @@ impl Controller {
                     min_ry = min_ry.min(ry);
                     max_ry = max_ry.max(ry);
 
-                    print!("\rReading: L({:03X}, {:03X}) R({:03X}, {:03X})   Min/Max L({:03X}, {:03X}, {:03X}, {:03X}) R({:03X}, {:03X}, {:03X}, {:03X})", 
+                    print!("\rReading: L({:03X}, {:03X}) R({:03X}, {:03X})   Min/Max L({:03X}, {:03X}, {:03X}, {:03X}) R({:03X}, {:03X}, {:03X}, {:03X})",
                         lx, ly, rx, ry, min_lx, min_ly, max_lx, max_ly, min_rx, min_ry, max_rx, max_ry);
                     io::stdout().flush()?;
                 }
@@ -328,7 +328,7 @@ impl Controller {
             println!("undershoot the circularity test's outer circle but will slightly increase overall circularity error.");
             print!("\ny/n: ");
             io::stdout().flush()?;
-            
+
             if Self::read_char().to_ascii_lowercase() == 'y' {
                 println!("\nOuter deadzone added");
                 0x050
@@ -356,7 +356,7 @@ impl Controller {
         const MAX_ATTEMPTS: u32 = 20;
         const MAX_RETRIES: u32 = 8;
         let mut buf = [0u8; 49];
-        
+
         for _ in 0..MAX_ATTEMPTS {
             // Prepare command buffer
             buf[0] = 0x01; // cmd
@@ -366,10 +366,10 @@ impl Controller {
             buf[11..15].copy_from_slice(&offset.to_le_bytes());
             buf[15] = data.len() as u8;
             buf[16..16 + data.len()].copy_from_slice(data);
-            
+
             // Send command
             self.device.write(&buf)?;
-            
+
             // Wait for response
             for _ in 0..MAX_RETRIES {
                 let mut resp = [0u8; 49];
@@ -388,9 +388,9 @@ impl Controller {
             thread::sleep(Duration::from_millis(10));
         }
 
-        // 
+        //
 
-        
+
         Err(anyhow!("Failed to write SPI data after maximum attempts"))
     }
 
@@ -403,13 +403,13 @@ impl Controller {
         data[3] = left_cal.ycenter;
         data[4] = left_cal.xcenter - left_cal.xmin;
         data[5] = left_cal.ycenter - left_cal.ymin;
-        
+
         // Pack into 9 bytes
         let mut stick_cal = [0u8; 9];
         stick_cal[0..3].copy_from_slice(&encode_stick_params(&[data[0], data[1]]));
         stick_cal[3..6].copy_from_slice(&encode_stick_params(&[data[2], data[3]]));
         stick_cal[6..9].copy_from_slice(&encode_stick_params(&[data[4], data[5]]));
-        
+
         self.write_spi_data(LEFT_STICK_CAL_ADDR, &stick_cal)
     }
 
@@ -422,24 +422,24 @@ impl Controller {
         data[3] = right_cal.ycenter - right_cal.ymin;
         data[4] = right_cal.xmax - right_cal.xcenter;
         data[5] = right_cal.ymax - right_cal.ycenter;
-        
+
         // Pack into 9 bytes
         let mut stick_cal = [0u8; 9];
         stick_cal[0..3].copy_from_slice(&encode_stick_params(&[data[0], data[1]]));
         stick_cal[3..6].copy_from_slice(&encode_stick_params(&[data[2], data[3]]));
         stick_cal[6..9].copy_from_slice(&encode_stick_params(&[data[4], data[5]]));
-        
+
         self.write_spi_data(RIGHT_STICK_CAL_ADDR, &stick_cal)
     }
 
-    fn write_calibration(&mut self, left_cal: StickCalibration, right_cal: StickCalibration, 
+    fn write_calibration(&mut self, left_cal: StickCalibration, right_cal: StickCalibration,
                         left_deadzone: u16, right_deadzone: u16, raw_calibration: bool) -> Result<()> {
-        
+
         // Print out the new calibration values
         match self.controller_type {
             ControllerType::JoyConL | ControllerType::ProController => {
                 println!("\nLeft Stick");
-                println!("Min/Max: X({:03X}, {:03X}) Y({:03X}, {:03X})", 
+                println!("Min/Max: X({:03X}, {:03X}) Y({:03X}, {:03X})",
                     left_cal.xmin, left_cal.xmax, left_cal.ymin, left_cal.ymax);
                 println!("Center (x,y): ({:03X}, {:03X}), Deadzone: {:03X}",
                     left_cal.xcenter, left_cal.ycenter, left_deadzone);
@@ -450,7 +450,7 @@ impl Controller {
         match self.controller_type {
             ControllerType::JoyConR | ControllerType::ProController => {
                 println!("\nRight Stick");
-                println!("Min/Max: X({:03X}, {:03X}) Y({:03X}, {:03X})", 
+                println!("Min/Max: X({:03X}, {:03X}) Y({:03X}, {:03X})",
                     right_cal.xmin, right_cal.xmax, right_cal.ymin, right_cal.ymax);
                 println!("Center (x,y): ({:03X}, {:03X}), Deadzone: {:03X}",
                     right_cal.xcenter, right_cal.ycenter, right_deadzone);
@@ -460,7 +460,7 @@ impl Controller {
 
         print!("\nWould you like to write this calibration to the controller? y/n: ");
         io::stdout().flush()?;
-        
+
         let choice = Self::read_char().to_ascii_lowercase();
         if choice != 'y' {
             println!("No changes have been made.");
@@ -468,15 +468,15 @@ impl Controller {
         }
 
         println!("\nWriting calibration to controller...");
-        
+
         // Fixed range ratio as in original code
-        let range_ratio_l = 0xE14;
-        let range_ratio_r = 0xE14;
-        
+        let range_ratio_l = 0xF80;// Default seems to be 0xE14, but that causes massive overshoot, and 0xFFF causes mild undershoot
+        let range_ratio_r = 0xF80;
+
         // Encode stick parameters
         let mut left_params = encode_stick_params(&[left_deadzone, range_ratio_l]);
         let mut right_params = encode_stick_params(&[range_ratio_r, right_deadzone]); // Note: swapped order
-        
+
         // Handle different controller types
         let (final_left_cal, final_right_cal) = match self.controller_type {
             ControllerType::JoyConL => {
@@ -494,7 +494,7 @@ impl Controller {
                 (left_cal, right_cal)
             }
         };
-        
+
         // Write calibrations in same order as original code
         self.write_right_stick_calibration(&final_right_cal)?;
         self.write_spi_data(RIGHT_STICK_PARAMS_ADDR, &right_params)?;
@@ -512,14 +512,14 @@ impl Controller {
             println!("Note: On PC, stick inputs may appear strange near the deadzone.");
             println!("Please test center and deadzone on a Nintendo Switch.\n");
         }
-        
+
         Ok(())
     }
 }
 
 fn main() {
     println!("Attempting to connect to controller...");
-    
+
     let mut controller = match Controller::connect() {
         Ok(controller) => controller,
         Err(e) => {
@@ -529,9 +529,9 @@ fn main() {
             return;
         }
     };
-    
+
     println!("Your controller is connected!");
-    
+
     println!("Getting device info...");
     match controller.get_device_info() {
         Ok((firmware, mac)) => {
