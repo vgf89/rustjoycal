@@ -6,10 +6,15 @@ use gpui::*;
 use parking_lot::Mutex;
 use std::sync::Arc;
 
+use crate::controller::ControllerType;
+
 // App State
 struct CalibrationApp {
     controller: Option<Arc<Mutex<Controller>>>,
     device_info: Option<(String, String)>, // Firmware, MAC
+    controller_type: Option<ControllerType>,
+    has_left: bool,
+    has_right: bool,
     stick_data: StickData,
     calibration_step: CalibrationStep,
     calibration_data: CalibrationData,
@@ -114,6 +119,9 @@ impl CalibrationApp {
         Self {
             controller: None,
             device_info: None,
+            controller_type: None,
+            has_left: false,
+            has_right: false,
             stick_data: StickData::default(),
             calibration_step: CalibrationStep::Connect,
             calibration_data: CalibrationData::new(),
@@ -130,9 +138,20 @@ impl CalibrationApp {
         match Controller::connect() {
             Ok(c) => {
                 let info = c.get_device_info().ok();
+                self.controller_type = Some(c.get_controller_type());
                 self.controller = Some(Arc::new(Mutex::new(c)));
                 self.device_info = info;
                 self.calibration_step = CalibrationStep::Connected;
+
+                if self.controller_type == Some(ControllerType::JoyConL) {
+                    self.has_left = true;
+                } else if self.controller_type == Some(ControllerType::JoyConR) {
+                    self.has_right = true;
+                } else if self.controller_type == Some(ControllerType::ProController) {
+                    self.has_left = true;
+                    self.has_right = true;
+                }
+
                 self.error_message = None;
             }
             Err(e) => {
@@ -243,24 +262,25 @@ fn stick_deadzone_visual(
     _cx: &Context<CalibrationApp>,
     x: u16,
     y: u16,
-    _min_x: Option<u16>,
-    _max_x: Option<u16>,
-    _min_y: Option<u16>,
-    _max_y: Option<u16>,
-    center_x: Option<u16>,
-    center_y: Option<u16>,
-    deadzone: Option<u16>,
+    min_x: u16,
+    max_x: u16,
+    min_y: u16,
+    max_y: u16,
+    center_x: u16,
+    center_y: u16,
+    deadzone: u16,
     label: &str,
 ) -> impl IntoElement {
     let size = 255.0;
     let raw_x_pct = x as f32 / 4095.0;
     let raw_y_pct = 1.0 - (y as f32 / 4095.0);
-    let min_x_pct = _min_x.unwrap() as f32 / 4095.0;
-    let max_x_pct = _max_x.unwrap() as f32 / 4095.0;
-    let min_y_pct = _min_y.unwrap() as f32 / 4095.0;
-    let max_y_pct = _max_y.unwrap() as f32 / 4095.0;
-    let center_x_pct = center_x.unwrap() as f32 / 4095.0;
-    let center_y_pct = center_y.unwrap() as f32 / 4095.0;
+    let min_x_pct = min_x as f32 / 4095.0;
+    let max_x_pct = max_x as f32 / 4095.0;
+    let min_y_pct = min_y as f32 / 4095.0;
+    let max_y_pct = max_y as f32 / 4095.0;
+    let dz_pct = (deadzone as f32 / 4095.0) * 2.0;
+    let cx_pct = center_x as f32 / 4095.0;
+    let cy_pct = center_y as f32 / 4095.0;
 
     div()
         .flex()
@@ -274,24 +294,15 @@ fn stick_deadzone_visual(
                 .border_0()
                 .relative()
                 // Deadzone viz
-                .map(|this| {
-                    if let (Some(cx), Some(cy), Some(dz)) = (center_x, center_y, deadzone) {
-                        let dz_pct = (dz as f32 / 4095.0) * 2.0;
-                        let cx_pct = cx as f32 / 4095.0; // 0 to 1
-                        let cy_pct = 1.0 - (cy as f32 / 4095.0);
-                        this.child(
-                            div()
-                                .absolute()
-                                .size(px(dz_pct) * size)
-                                .left(px((cx_pct) * size) - px(dz_pct * size / 2.0))
-                                .top(px((cy_pct) * size) - px(dz_pct * size / 2.0))
-                                .rounded_full()
-                                .bg(rgba(0xFF00FF88)),
-                        )
-                    } else {
-                        this
-                    }
-                })
+                .child(
+                    div()
+                        .absolute()
+                        .size(px(dz_pct) * size)
+                        .left(px((cx_pct) * size) - px(dz_pct * size / 2.0))
+                        .top(px((1.0 - cy_pct) * size) - px(dz_pct * size / 2.0))
+                        .rounded_full()
+                        .bg(rgba(0xFF00FF88)),
+                )
                 // min/max viz
                 .child(
                     div()
@@ -299,10 +310,8 @@ fn stick_deadzone_visual(
                         .absolute()
                         .w(px((max_x_pct - min_x_pct) * size))
                         .h(px((max_y_pct - min_y_pct) * size))
-                        .left(px((center_x_pct - (max_x_pct - min_x_pct) / 2.0) * size))
-                        .top(px(
-                            (1.0 - center_y_pct - (max_y_pct - min_y_pct) / 2.0) * size
-                        )),
+                        .left(px((cx_pct - (max_x_pct - min_x_pct) / 2.0) * size))
+                        .top(px((1.0 - cy_pct - (max_y_pct - min_y_pct) / 2.0) * size)),
                 )
                 // Stick Dot
                 .child(
@@ -474,7 +483,13 @@ impl Render for CalibrationApp {
             },
             CalibrationStep::Connected => {
                 let info_text = if let Some((fw, mac)) = &self.device_info {
-                    format!("Firmware: {} | MAC: {}", fw, mac)
+                    let controllertypestring = match self.controller_type {
+                        Some(ControllerType::JoyConL) => "Switch Joy-Con (L)",
+                        Some(ControllerType::JoyConR) => "Switch Joy-Con (R)",
+                        Some(ControllerType::ProController) => "Switch Pro Controller",
+                        None => "Unknown Controller Type",
+                    };
+                    format!("Type: {}\nFirmware: {} | MAC: {}", controllertypestring, fw, mac)
                 } else {
                     "Unknown Device".to_string()
                 };
@@ -509,20 +524,34 @@ impl Render for CalibrationApp {
                     .child("Do NOT touch the outer rim.")
                      .child(
                         div().flex().gap_8()
-                        .child(stick_deadzone_visual(cx, self.stick_data.lx, self.stick_data.ly,
-                            Some(self.calibration_data.min_lx), Some(self.calibration_data.max_lx),
-                            Some(self.calibration_data.min_ly), Some(self.calibration_data.max_ly),
-                            Some(self.calibration_data.center_lx),
-                            Some(self.calibration_data.center_ly),
-                            Some(self.calibration_data.deadzone_l),
-                            "Left Stick"))
-                        .child(stick_deadzone_visual(cx, self.stick_data.rx, self.stick_data.ry,
-                            Some(self.calibration_data.min_rx), Some(self.calibration_data.max_rx),
-                            Some(self.calibration_data.min_ry), Some(self.calibration_data.max_ry),
-                            Some(self.calibration_data.center_rx),
-                            Some(self.calibration_data.center_ry),
-                            Some(self.calibration_data.deadzone_r),
-                            "Right Stick"))
+                        .child(if self.has_left {
+                                div().child(
+                                    stick_deadzone_visual(cx, self.stick_data.lx, self.stick_data.ly,
+                                    self.calibration_data.min_lx, self.calibration_data.max_lx,
+                                    self.calibration_data.min_ly, self.calibration_data.max_ly,
+                                    self.calibration_data.center_lx,
+                                    self.calibration_data.center_ly,
+                                    self.calibration_data.deadzone_l,
+                                    "Left Stick")
+                                )
+                            } else {
+                                div()
+                            }
+                        )
+                        .child( if self.has_right {
+                                div().child(
+                                    stick_deadzone_visual(cx, self.stick_data.rx, self.stick_data.ry,
+                                    self.calibration_data.min_rx, self.calibration_data.max_rx,
+                                    self.calibration_data.min_ry, self.calibration_data.max_ry,
+                                    self.calibration_data.center_rx,
+                                    self.calibration_data.center_ry,
+                                    self.calibration_data.deadzone_r,
+                                    "Right Stick")
+                                )
+                            } else {
+                                div()
+                            }
+                        )
                     )
                     .child(
                         div()
@@ -546,14 +575,32 @@ impl Render for CalibrationApp {
                     .child("Slowly spin each stick gently around the OUTER RIM 3 times.")
                      .child(
                         div().flex().gap_8()
-                        .child(stick_range_visual(cx, self.stick_data.lx, self.stick_data.ly,
-                            self.calibration_data.min_lx, self.calibration_data.max_lx,
-                            self.calibration_data.min_ly, self.calibration_data.max_ly,
-                            "Left Stick"))
-                        .child(stick_range_visual(cx, self.stick_data.rx, self.stick_data.ry,
-                            self.calibration_data.min_rx, self.calibration_data.max_rx,
-                            self.calibration_data.min_ry, self.calibration_data.max_ry,
-                            "Right Stick"))
+                        .child(
+                            if self.has_left {
+                                div().child(
+                                    stick_range_visual(cx, self.stick_data.lx, self.stick_data.ly,
+                                    self.calibration_data.min_lx, self.calibration_data.max_lx,
+                                    self.calibration_data.min_ly, self.calibration_data.max_ly,
+                                    "Left Stick")
+                                )
+                            } else {
+                                div()
+                            }
+                        )
+                        .child(
+                            if self.has_right {
+                                div()
+                                    .child(
+                                        stick_range_visual(cx, self.stick_data.rx, self.stick_data.ry,
+                                        self.calibration_data.min_rx, self.calibration_data.max_rx,
+                                        self.calibration_data.min_ry, self.calibration_data.max_ry,
+                                        "Right Stick"
+                                        )
+                                    )
+                            } else {
+                                div()
+                            }
+                        )
                     )
                     .child(
                         div()
@@ -612,16 +659,31 @@ impl Render for CalibrationApp {
                     .child("Check the visualized calibration below.")
                     .child(
                         div().flex().gap_8()
-                        .child(calibrated_visual(cx, self.stick_data.lx, self.stick_data.ly,
-                            self.left_result.xmin, self.left_result.xmax,
-                            self.left_result.ymin, self.left_result.ymax,
-                            self.left_result.xcenter, self.left_result.ycenter,
-                            self.left_deadzone, "Left Calibrated"))
-                        .child(calibrated_visual(cx, self.stick_data.rx, self.stick_data.ry,
-                            self.right_result.xmin, self.right_result.xmax,
-                            self.right_result.ymin, self.right_result.ymax,
-                            self.right_result.xcenter, self.right_result.ycenter,
-                            self.right_deadzone, "Right Calibrated"))
+                        .child(
+                            if self.has_left {
+                                div().child(
+                                    calibrated_visual(cx, self.stick_data.lx, self.stick_data.ly,
+                                    self.left_result.xmin, self.left_result.xmax,
+                                    self.left_result.ymin, self.left_result.ymax,
+                                    self.left_result.xcenter, self.left_result.ycenter,
+                                    self.left_deadzone, "Left Calibrated")
+                                )
+                            } else {
+                                div()
+                            }
+                        )
+                        .child(
+                            if self.has_right {
+                                div().child(
+                                    calibrated_visual(cx, self.stick_data.rx, self.stick_data.ry,
+                                    self.right_result.xmin, self.right_result.xmax,
+                                    self.right_result.ymin, self.right_result.ymax,
+                                    self.right_result.xcenter, self.right_result.ycenter,
+                                    self.right_deadzone, "Right Calibrated"))
+                            } else {
+                                div()
+                            }
+                        )
                     )
                     .child(
                         div()

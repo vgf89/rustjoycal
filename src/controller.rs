@@ -142,6 +142,10 @@ impl Controller {
         Err(anyhow!("Failed to get valid device info"))
     }
 
+    pub fn get_controller_type(&self) -> ControllerType {
+        self.controller_type
+    }
+
     pub fn enable_standard_input(&mut self) -> Result<()> {
         let mut cmd = [0u8; 49];
         cmd[0] = 0x01; // cmd
