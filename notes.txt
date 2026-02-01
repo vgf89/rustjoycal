@@ -1,36 +1,4 @@
-Test Plan for RustJoyCal UI
-
-1. Build Verification
-   - Run `cargo check` (PASSED)
-   - Run `cargo build` to ensure binary generation.
-
-2. UI Flow Verification (Manual/Visual)
-   - Launch app.
-   - Verify "Welcome" screen with "Connect Controller" button.
-   - Connect a compatible controller (Joy-Con or Pro Controller).
-   - Click "Connect Controller".
-   - Verify "Connected" screen displays Firmware and MAC.
-   - Click "Start Calibration Wizard".
-   - Verify "Center & Deadzone" step:
-     - Visualizer shows stick movement.
-     - Move sticks to verify updates.
-   - Click "Next Step".
-   - Verify "Range Calibration" step:
-     - Visualizer shows stick movement.
-     - Spin sticks.
-   - Click "Finish Range Finding".
-   - Verify "Outer Deadzone" choice.
-   - Select "Yes" or "No".
-   - Verify "Review" screen:
-     - Visualizer shows calibrated output vs raw input (if implemented, currently shows one set of sticks, logic implies calibrated view).
-   - Click "WRITE to Controller".
-   - Verify completion screen.
-
-3. Logic Verification (Code Review)
-   - `CalibrationData` accumulation: Min/Max updates in `update_stick_data`.
-   - Calibration calculation: Center = (min+max)/2, Deadzone = (max-min)/2.
-   - SPI Write: Correct command structure (0x01, 0x11 subcmd).
-
-4. Safety
-   - Ensure "WRITE" is only possible after review.
-   - Check for error handling on connection failure.
+//TODO: Display all options on a single page, instead of discreet wizard steps:
+//   - Set center and deadzone button
+//   - Spinners for deadzone, xmin, xcenter, xmax, ymin, ycenter, ymax
+//   - visualization of raw input data, and separate visualization of calibrated data

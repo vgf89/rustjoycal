@@ -54,18 +54,6 @@ pub struct StickData {
     pub ry: u16,
 }
 
-#[derive(Debug, Default, Clone)]
-pub struct CalibrationState {
-    pub min_lx: u16,
-    pub max_lx: u16,
-    pub min_ly: u16,
-    pub max_ly: u16,
-    pub min_rx: u16,
-    pub max_rx: u16,
-    pub min_ry: u16,
-    pub max_ry: u16,
-}
-
 impl Default for StickData {
     fn default() -> Self {
         Self {

@@ -58,7 +58,6 @@ struct CalibrationData {
 fn euclidean_distance(p1_x: f64, p1_y: f64, p2_x: f64, p2_y: f64) -> f64 {
     let dx = p2_x - p1_x;
     let dy = p2_y - p1_y;
-    // The .sqrt() method is available on all floating-point primitives (f32, f64).
     (dx.powi(2) + dy.powi(2)).sqrt()
 }
 
@@ -717,7 +716,6 @@ impl Render for CalibrationApp {
                             .on_click(cx.listener(|_, _, _, cx| cx.quit()))
                     )
             },
-            _ => div().child("Loading..."),
         };
 
         div()
