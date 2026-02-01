@@ -1,7 +1,36 @@
-| SPI Address | Size (bytes) | Description               | Content |
-|-------------|--------------|---------------------------|----------|
-| 0x603D      | 0x12      | Factory Stick Calibration    | Left stick (9 bytes):<br>- 0x603D-0x603F: Max above center<br>- 0x6040-0x6042: Center<br>- 0x6043-0x6045: Min below center<br>
-                                                          Right stick (9 bytes):<br>- 0x6046-0x6048: Max above center<br>- 0x6049-0x604B: Center<br>- 0x604C-0x604E: Min below center |
-| 0x6086      | 0x12      | Left Stick Parameters/Model  | Stick model data for left stick |
-| 0x6098      | 0x12      | Right Stick Parameters/Model | Stick model data for right stick |
-| 0x8010      | 0x16      | User Stick Calibration       | Left stick (11 bytes):<br>- Magic bytes + calibration data<br>Right stick (11 bytes):<br>- Magic bytes + calibration data |
+Test Plan for RustJoyCal UI
+
+1. Build Verification
+   - Run `cargo check` (PASSED)
+   - Run `cargo build` to ensure binary generation.
+
+2. UI Flow Verification (Manual/Visual)
+   - Launch app.
+   - Verify "Welcome" screen with "Connect Controller" button.
+   - Connect a compatible controller (Joy-Con or Pro Controller).
+   - Click "Connect Controller".
+   - Verify "Connected" screen displays Firmware and MAC.
+   - Click "Start Calibration Wizard".
+   - Verify "Center & Deadzone" step:
+     - Visualizer shows stick movement.
+     - Move sticks to verify updates.
+   - Click "Next Step".
+   - Verify "Range Calibration" step:
+     - Visualizer shows stick movement.
+     - Spin sticks.
+   - Click "Finish Range Finding".
+   - Verify "Outer Deadzone" choice.
+   - Select "Yes" or "No".
+   - Verify "Review" screen:
+     - Visualizer shows calibrated output vs raw input (if implemented, currently shows one set of sticks, logic implies calibrated view).
+   - Click "WRITE to Controller".
+   - Verify completion screen.
+
+3. Logic Verification (Code Review)
+   - `CalibrationData` accumulation: Min/Max updates in `update_stick_data`.
+   - Calibration calculation: Center = (min+max)/2, Deadzone = (max-min)/2.
+   - SPI Write: Correct command structure (0x01, 0x11 subcmd).
+
+4. Safety
+   - Ensure "WRITE" is only possible after review.
+   - Check for error handling on connection failure.
