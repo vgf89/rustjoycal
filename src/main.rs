@@ -323,7 +323,7 @@ fn stick_deadzone_visual(
                         .top(px(raw_y_pct) * size - px(1.0)),
                 ),
         )
-        .child(format!("X: {:.3}%\nY: {:.3}%", raw_x_pct, raw_y_pct))
+        .child(format!("X: {:.3}\nY: {:.3}", raw_x_pct, raw_y_pct))
 }
 
 // Visualize stick X Y range
@@ -446,7 +446,7 @@ fn calibrated_visual(
                         .top(px(1.0 - y) * size - px(1.0)),
                 ),
         ))
-    .child(format!("X: {:.3}%\nY: {:.3}%", x, y))
+    .child(format!("X: {:.3}\nY: {:.3}", x, y))
 }
 
 impl Render for CalibrationApp {
