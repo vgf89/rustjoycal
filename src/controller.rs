@@ -229,6 +229,11 @@ impl Controller {
         _raw_calibration: bool, // Currently unused logic but kept for interface
     ) -> Result<()> {
         // Fixed range ratio as in original code
+        // Default value here is 0xE14, but greater than ideal
+        // overshoot, while 0xFFF tends to cause some undershoot.
+        // There's probably a proper way to model this var's effect
+        // and calculate the correct value, but somewhere in the middle
+        // seems to behave fine with both Pro Controllers and Joycons.
         let range_ratio_l = 0xF80;
         let range_ratio_r = 0xF80;
 
