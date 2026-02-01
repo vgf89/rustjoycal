@@ -29,7 +29,6 @@ enum CalibrationStep {
     CalibrateRange,
     OuterDeadzoneChoice,
     Review,
-    Writing,
     Done,
 }
 
@@ -158,15 +157,14 @@ impl CalibrationApp {
             CalibrationStep::CalibrateCenter => {
                 // Calculate Centers and Deadzones
                 let data = &self.calibration_data;
-                const EXTRA_INNER_DEADZONE: u16 = 0x00;
 
                 self.left_result.xcenter = (data.min_lx + data.max_lx) / 2;
                 self.left_result.ycenter = (data.min_ly + data.max_ly) / 2;
                 self.right_result.xcenter = (data.min_rx + data.max_rx) / 2;
                 self.right_result.ycenter = (data.min_ry + data.max_ry) / 2;
 
-                self.left_deadzone = ((data.max_lx - data.min_lx) / 2) + EXTRA_INNER_DEADZONE;
-                self.right_deadzone = ((data.max_rx - data.min_rx) / 2) + EXTRA_INNER_DEADZONE;
+                self.left_deadzone = (data.max_lx - data.min_lx) / 2;
+                self.right_deadzone = (data.max_rx - data.min_rx) / 2;
 
                 self.calibration_step = CalibrationStep::CalibrateRange;
                 self.calibration_data = CalibrationData::new(); // Reset for range
@@ -254,8 +252,9 @@ fn stick_deadzone_visual(
     deadzone: Option<u16>,
     label: &str,
 ) -> impl IntoElement {
-    let raw_x_pct = (x as f32 / 4095.0);
-    let raw_y_pct = (1.0 - (y as f32 / 4095.0));
+    let size = 255.0;
+    let raw_x_pct = x as f32 / 4095.0;
+    let raw_y_pct = 1.0 - (y as f32 / 4095.0);
     let min_x_pct = _min_x.unwrap() as f32 / 4095.0;
     let max_x_pct = _max_x.unwrap() as f32 / 4095.0;
     let min_y_pct = _min_y.unwrap() as f32 / 4095.0;
@@ -278,14 +277,14 @@ fn stick_deadzone_visual(
                 .map(|this| {
                     if let (Some(cx), Some(cy), Some(dz)) = (center_x, center_y, deadzone) {
                         let dz_pct = (dz as f32 / 4095.0) * 2.0;
-                        let cx_pct = (cx as f32 / 4095.0); // 0 to 1
+                        let cx_pct = cx as f32 / 4095.0; // 0 to 1
                         let cy_pct = 1.0 - (cy as f32 / 4095.0);
                         this.child(
                             div()
                                 .absolute()
-                                .size(px(dz_pct) * 255.0)
-                                .left(px((cx_pct) * 255.0) - px((dz_pct * 255.0 / 2.0)))
-                                .top(px((cy_pct) * 255.0) - px((dz_pct * 255.0 / 2.0)))
+                                .size(px(dz_pct) * size)
+                                .left(px((cx_pct) * size) - px(dz_pct * size / 2.0))
+                                .top(px((cy_pct) * size) - px(dz_pct * size / 2.0))
                                 .rounded_full()
                                 .bg(rgba(0xFF00FF88)),
                         )
@@ -298,11 +297,11 @@ fn stick_deadzone_visual(
                     div()
                         .bg(rgba(0x0000FF88))
                         .absolute()
-                        .w(px((max_x_pct - min_x_pct) * 255.0))
-                        .h(px((max_y_pct - min_y_pct) * 255.0))
-                        .left(px((center_x_pct - (max_x_pct - min_x_pct) / 2.0) * 255.0))
+                        .w(px((max_x_pct - min_x_pct) * size))
+                        .h(px((max_y_pct - min_y_pct) * size))
+                        .left(px((center_x_pct - (max_x_pct - min_x_pct) / 2.0) * size))
                         .top(px(
-                            (1.0 - center_y_pct - (max_y_pct - min_y_pct) / 2.0) * 255.0
+                            (1.0 - center_y_pct - (max_y_pct - min_y_pct) / 2.0) * size
                         )),
                 )
                 // Stick Dot
@@ -312,14 +311,14 @@ fn stick_deadzone_visual(
                         .size(px(2.0))
                         .bg(rgb(0x00FF00))
                         .rounded_full()
-                        .left(px(raw_x_pct) * 255.0 - px(1.0))
-                        .top(px(raw_y_pct) * 255.0 - px(1.0)),
+                        .left(px(raw_x_pct) * size - px(1.0))
+                        .top(px(raw_y_pct) * size - px(1.0)),
                 ),
         )
-        .child(format!("X: {:.3}% Y: {:.3}%", raw_x_pct, raw_y_pct))
+        .child(format!("X: {:.3}%\nY: {:.3}%", raw_x_pct, raw_y_pct))
 }
 
-// visualize the calibrated stick range. Bottom layer is raw axis square (255x255), middle layer is stick range rectangle (min_x..max_x, min_y..max_y), top layer is stick dot(x, y)
+// Visualize stick X Y range
 fn stick_range_visual(
     _cx: &Context<CalibrationApp>,
     x: u16,
@@ -348,7 +347,6 @@ fn stick_range_visual(
                 .relative()
                 .size(px(size))
                 .bg(rgb(0x222222))
-                // Range viz
                 // Range box
                 .child(
                     div()
@@ -374,12 +372,24 @@ fn stick_range_visual(
         )
 }
 
+fn remap_calibrated_axis(value: f32, min: f32, center: f32, max: f32, deadzone: f32) -> f32 {
+    // remap [min, center-deadzone] to [0, 0.5] and [center+deadzone, max] to [0.5, 1.0]
+    if value < center - deadzone {
+        (value - min) / (center - deadzone - min) / 2.0
+    } else if value > center + deadzone {
+        (value - deadzone - center) / (max - center - deadzone) / 2.0 + 0.5
+    } else {
+        0.5
+    }
+    .clamp(0.0, 1.0)
+}
+
 // Full calibrated stick visual.
 // Takes in raw stick data, xmin, xmax, ymin, ymax, xcenter, ycenter, and deadzone,
 // and produces a calibrated visual which maps
-// [min, center-deadzone] to [0, 0.5]
-// and
-// [center+deadzone, max] to [0.5, 1.0]
+// [min, center-deadzone] -> [0, 0.5]
+// [center+deadzone, max] -> [0.5, 1.0]
+// just as the Switch does.
 fn calibrated_visual(
     _cx: &Context<CalibrationApp>,
     raw_x: u16,
@@ -394,38 +404,20 @@ fn calibrated_visual(
     label: &str,
 ) -> impl IntoElement {
     let size = 255.0;
-    let raw_x_pct = (raw_x as f32 / 4095.0);
-    let raw_y_pct = (raw_y as f32 / 4095.0);
-    let xmin_pct = (xmin as f32 / 4095.0);
-    let xmax_pct = (xmax as f32 / 4095.0);
-    let ymin_pct = (ymin as f32 / 4095.0);
-    let ymax_pct = (ymax as f32 / 4095.0);
-    let xcenter_pct = (xcenter as f32 / 4095.0);
-    let ycenter_pct = (ycenter as f32 / 4095.0);
-    let deadzone_pct = (deadzone as f32 / 4095.0);
+    let raw_x_pct = raw_x as f32 / 4095.0;
+    let raw_y_pct = raw_y as f32 / 4095.0;
+    let xmin_pct = xmin as f32 / 4095.0;
+    let xmax_pct = xmax as f32 / 4095.0;
+    let ymin_pct = ymin as f32 / 4095.0;
+    let ymax_pct = ymax as f32 / 4095.0;
+    let xcenter_pct = xcenter as f32 / 4095.0;
+    let ycenter_pct = ycenter as f32 / 4095.0;
+    let deadzone_pct = deadzone as f32 / 4095.0;
 
-    // remap [min, center-deadzone] to [0, 0.5] and [center+deadzone, max] to [0.5, 1.0]
-    let x = if raw_x_pct < xcenter_pct - deadzone_pct {
-        (raw_x_pct - xmin_pct) / (xcenter_pct - deadzone_pct - xmin_pct) / 2.0
-    } else if raw_x_pct > xcenter_pct + deadzone_pct {
-        (raw_x_pct - deadzone_pct - xcenter_pct) / (xmax_pct - xcenter_pct - deadzone_pct) / 2.0
-            + 0.5
-    } else {
-        0.5
-    }
-    .clamp(0.0, 1.0);
+    let x = remap_calibrated_axis(raw_x_pct, xmin_pct, xcenter_pct, xmax_pct, deadzone_pct);
+    let y = remap_calibrated_axis(raw_y_pct, ymin_pct, ycenter_pct, ymax_pct, deadzone_pct);
 
-    let y = if raw_y_pct < ycenter_pct - deadzone_pct {
-        (raw_y_pct - ymin_pct) / (ycenter_pct - deadzone_pct - ymin_pct) / 2.0
-    } else if raw_y_pct > ycenter_pct + deadzone_pct {
-        (raw_y_pct - deadzone_pct - ycenter_pct) / (ymax_pct - ycenter_pct - deadzone_pct) / 2.0
-            + 0.5
-    } else {
-        0.5
-    }
-    .clamp(0.0, 1.0);
-
-    div()
+    (div()
         .flex()
         .flex_col()
         .items_center()
@@ -445,8 +437,8 @@ fn calibrated_visual(
                         .left(px(x) * size - px(1.0))
                         .top(px(1.0 - y) * size - px(1.0)),
                 ),
-        )
-        .child(format!("X: {:.3}% Y: {:.3}%", x, y))
+        ))
+    .child(format!("X: {:.3}%\nY: {:.3}%", x, y))
 }
 
 impl Render for CalibrationApp {
